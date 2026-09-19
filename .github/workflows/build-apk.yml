@@ -23,14 +23,12 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Criar projeto Android de teste
+      - name: Criar teste Android 100% nativo
         shell: bash
         run: |
           set -e
           mkdir -p app/src/main/java/com/testereset/app
           mkdir -p app/src/main/res/values
-          mkdir -p app/src/main/assets
-          cp index.html app/src/main/assets/index.html
           cat > settings.gradle <<'EOF'
           pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
           dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS); repositories { google(); mavenCentral() } }
@@ -43,7 +41,7 @@ jobs:
           cat > app/build.gradle <<'EOF'
           plugins { id 'com.android.application' }
           android { namespace 'com.teste.reset'; compileSdk 35
-            defaultConfig { applicationId 'com.teste.reset'; minSdk 23; targetSdk 35; versionCode 5; versionName '1.4' }
+            defaultConfig { applicationId 'com.teste.reset'; minSdk 23; targetSdk 35; versionCode 6; versionName '1.5' }
           }
           EOF
           cat > app/src/main/res/values/styles.xml <<'EOF'
@@ -60,46 +58,77 @@ jobs:
           EOF
           cat > app/src/main/java/com/testereset/app/MainActivity.java <<'EOF'
           package com.teste.reset;
+
           import android.app.Activity;
           import android.os.Bundle;
-          import android.webkit.WebView;
-          import android.webkit.WebViewClient;
-          import android.webkit.JavascriptInterface;
-          import android.content.Context;
           import android.graphics.Color;
-          import android.view.ViewGroup;
+          import android.graphics.Typeface;
+          import android.view.Gravity;
+          import android.view.View;
           import android.widget.Button;
           import android.widget.LinearLayout;
+          import android.widget.TextView;
+          import android.widget.Toast;
+
           public class MainActivity extends Activity {
-            WebView w;
-            Bridge bridge;
-            @Override public void onCreate(Bundle b) {
-              super.onCreate(b);
-              LinearLayout root=new LinearLayout(this);
+            private int valor = 0;
+            private TextView numero;
+
+            @Override public void onCreate(Bundle savedInstanceState) {
+              super.onCreate(savedInstanceState);
+
+              LinearLayout root = new LinearLayout(this);
               root.setOrientation(LinearLayout.VERTICAL);
-              Button nativeReset=new Button(this);
-              nativeReset.setText("RESET NATIVO ANDROID");
-              nativeReset.setTextSize(17);
-              nativeReset.setTextColor(Color.WHITE);
-              nativeReset.setBackgroundColor(Color.rgb(210,35,35));
-              w=new WebView(this);
-              w.getSettings().setJavaScriptEnabled(true);
-              w.getSettings().setDomStorageEnabled(true);
-              w.setWebViewClient(new WebViewClient());
-              bridge=new Bridge(this);
-              w.addJavascriptInterface(bridge,"AndroidGPS");
-              nativeReset.setOnClickListener(v -> { bridge.resetAll(); w.reload(); });
-              root.addView(nativeReset,new LinearLayout.LayoutParams(-1,70));
-              root.addView(w,new LinearLayout.LayoutParams(-1,0,1));
+              root.setPadding(30, 30, 30, 30);
+              root.setGravity(Gravity.CENTER_HORIZONTAL);
+
+              TextView titulo = new TextView(this);
+              titulo.setText("TESTE RESET — BOTÃO NATIVO");
+              titulo.setTextSize(22);
+              titulo.setTypeface(null, Typeface.BOLD);
+              titulo.setGravity(Gravity.CENTER);
+              root.addView(titulo, new LinearLayout.LayoutParams(-1, 100));
+
+              numero = new TextView(this);
+              numero.setText("0");
+              numero.setTextSize(64);
+              numero.setTypeface(null, Typeface.BOLD);
+              numero.setGravity(Gravity.CENTER);
+              root.addView(numero, new LinearLayout.LayoutParams(-1, 160));
+
+              Button adicionar = new Button(this);
+              adicionar.setText("+1");
+              adicionar.setTextSize(20);
+              adicionar.setOnClickListener(v -> {
+                valor++;
+                atualizar();
+                Toast.makeText(this, "+1 executado", Toast.LENGTH_SHORT).show();
+              });
+              root.addView(adicionar, new LinearLayout.LayoutParams(-1, 80));
+
+              Button reset = new Button(this);
+              reset.setText("RESET");
+              reset.setTextSize(20);
+              reset.setTextColor(Color.WHITE);
+              reset.setBackgroundColor(Color.rgb(210,35,35));
+              reset.setOnClickListener(v -> {
+                valor = 0;
+                atualizar();
+                Toast.makeText(this, "RESET EXECUTADO", Toast.LENGTH_SHORT).show();
+              });
+              root.addView(reset, new LinearLayout.LayoutParams(-1, 80));
+
+              TextView explicacao = new TextView(this);
+              explicacao.setText("Este teste não usa WebView, HTML, JavaScript ou armazenamento. Os botões são Android nativos.");
+              explicacao.setTextSize(15);
+              explicacao.setGravity(Gravity.CENTER);
+              root.addView(explicacao, new LinearLayout.LayoutParams(-1, 120));
+
               setContentView(root);
-              w.loadUrl("file:///android_asset/index.html");
             }
-            public static class Bridge {
-              final Context c;
-              Bridge(Context x){c=x;}
-              @JavascriptInterface public String getTestValue(){return c.getSharedPreferences("RESET_TEST",0).getString("value","0");}
-              @JavascriptInterface public void setTestValue(String value){c.getSharedPreferences("RESET_TEST",0).edit().putString("value",value).commit();}
-              public void resetAll(){c.getSharedPreferences("RESET_TEST",0).edit().clear().commit();}
+
+            private void atualizar() {
+              numero.setText(String.valueOf(valor));
             }
           }
           EOF
@@ -110,6 +139,6 @@ jobs:
       - name: Publicar APK
         uses: actions/upload-artifact@v4
         with:
-          name: Teste-Reset-Nativo-APK-v2
+          name: Teste-Botao-Nativo-APK
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
