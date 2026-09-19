@@ -1,0 +1,58 @@
+name: APK - Teste isolado do Reset
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar código
+        uses: actions/checkout@v4
+      - name: Preparar projeto Android
+        run: |
+          mkdir -p app/src/main/assets app/src/main/java/com/testereset/app
+          cp index.html app/src/main/assets/index.html
+          cat > settings.gradle <<'EOF'
+pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
+dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS); repositories { google(); mavenCentral() } }
+rootProject.name='TesteReset'
+include ':app'
+EOF
+          cat > build.gradle <<'EOF'
+plugins { id 'com.android.application' version '8.13.0' apply false }
+EOF
+          cat > app/build.gradle <<'EOF'
+plugins { id 'com.android.application' }
+
+android { namespace 'com.teste.reset'; compileSdk 35
+ defaultConfig { applicationId 'com.teste.reset'; minSdk 23; targetSdk 35; versionCode 1; versionName '1.0' }
+}
+EOF
+          cat > app/src/main/AndroidManifest.xml <<'EOF'
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:theme="@style/AppTheme" android:label="Teste Reset" android:icon="@android:drawable/ic_menu_rotate"><activity android:name=".MainActivity" android:screenOrientation="portrait" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter></activity></application></manifest>
+EOF
+          mkdir -p app/src/main/res/values
+          cat > app/src/main/res/values/styles.xml <<'EOF'
+<resources><style name="AppTheme" parent="android:style/Theme.Material.Light.NoActionBar"><item name="android:fontFamily">sans</item><item name="android:colorAccent">#16a34a</item></style></resources>
+EOF
+          cat > app/src/main/java/com/testereset/app/MainActivity.java <<'EOF'
+package com.teste.reset;
+import android.app.Activity;import android.os.Bundle;import android.webkit.JavascriptInterface;import android.webkit.WebView;import android.webkit.WebViewClient;import android.content.Context;
+public class MainActivity extends Activity{
+ WebView w;
+ @Override public void onCreate(Bundle b){super.onCreate(b);w=new WebView(this);w.getSettings().setJavaScriptEnabled(true);w.getSettings().setDomStorageEnabled(true);w.setWebViewClient(new WebViewClient());w.addJavascriptInterface(new Bridge(this),"AndroidGPS");setContentView(w);w.loadUrl("file:///android_asset/index.html");}
+ static class Bridge{Context c;Bridge(Context c){this.c=c;}@JavascriptInterface public void resetAll(){c.getSharedPreferences("trip",0).edit().clear().apply();c.getSharedPreferences("app",0).edit().clear().apply();c.getSharedPreferences("vehicle",0).edit().clear().apply();}}
+}
+EOF
+      - name: Configurar Java
+        uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '17'}
+      - name: Configurar Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with: {gradle-version: '8.13'}
+      - name: Compilar
+        run: gradle :app:assembleDebug
+      - name: Publicar APK
+        uses: actions/upload-artifact@v4
+        with: {name: Teste-Reset-APK, path: app/build/outputs/apk/debug/app-debug.apk}
