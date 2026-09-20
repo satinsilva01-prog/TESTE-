@@ -12,47 +12,39 @@ jobs:
       - name: Baixar arquivos do repositório de teste
         uses: actions/checkout@v4
 
-      - name: Baixar cópia da V35 oficial
+      - name: Baixar projeto Android da V35 oficial
         run: |
           set -euxo pipefail
           git clone --depth 1 https://github.com/satinsilva01-prog/assistente-de-viagem.git source
           test -s source/index.html
-          test -s ./tomtom-integracao-teste.js
-          test -s ./manutencao-relatorio.js
+          test -s ./index.html
 
-      - name: Integrar recursos DIRETAMENTE no index.html da cópia de teste
+      - name: Usar EXATAMENTE o HTML V35 já testado
+        run: |
+          set -euxo pipefail
+          cp -f ./index.html ./source/index.html
+          grep -q 'V35 HTML TESTE' ./source/index.html
+          grep -q 'TomTom' ./source/index.html
+          grep -q 'Gerar relatório PDF' ./source/index.html
+          grep -q 'tomtomApiKey' ./source/index.html
+          grep -q 'btnRelatorioManutencao' ./source/index.html
+          grep -q 'CITY=120000' ./source/index.html
+          grep -q 'ROAD=360000' ./source/index.html
+
+      - name: Configurar APK para instalação separada do oficial
         working-directory: source
         run: |
           set -euxo pipefail
-          cp ../tomtom-integracao-teste.js ./tomtom-integracao.js
-          cp ../manutencao-relatorio.js ./manutencao-relatorio.js
-
-          python3 - <<'PY'
-          from pathlib import Path
-          p=Path('index.html')
-          s=p.read_text(encoding='utf-8')
-          marker='ASSISTENTE_TESTE_V35_TOMTOM_MANUTENCAO_INTEGRADO'
-          if marker in s:
-              raise SystemExit('Integração já presente; não duplicar')
-          title='<title>Assistente de Viagem V35</title>'
-          s=s.replace(title,'<title>Assistente de Viagem V35 — TESTE TomTom + Manutenção</title>',1)
-          tt=Path('tomtom-integracao.js').read_text(encoding='utf-8')
-          mt=Path('manutencao-relatorio.js').read_text(encoding='utf-8')
-          injection='''\n<script>/* ASSISTENTE_TESTE_V35_TOMTOM_MANUTENCAO_INTEGRADO */\n'''+tt+'''\n</script>\n<script>\n'''+mt+'''\n</script>\n'''
-          pos=s.lower().rfind('</body>')
-          if pos<0: raise SystemExit('V35 sem </body>')
-          s=s[:pos]+injection+s[pos:]
-          p.write_text(s,encoding='utf-8')
-          PY
-
-          # O APK de teste precisa ser outro aplicativo, instalado ao lado do oficial.
           python3 - <<'PY'
           from pathlib import Path
           g=Path('app/build.gradle.kts')
           s=g.read_text(encoding='utf-8')
-          s=s.replace('applicationId = "com.assistentedeviagem.app"','applicationId = "com.assistentedeviagem.app.teste"',1)
-          s=s.replace('versionCode = 4','versionCode = 3501',1)
-          s=s.replace('versionName = "2.1"','versionName = "35.0-TESTE"',1)
+          if 'applicationId = "com.assistentedeviagem.app"' in s:
+              s=s.replace('applicationId = "com.assistentedeviagem.app"','applicationId = "com.assistentedeviagem.app.teste"',1)
+          if 'versionCode = 4' in s:
+              s=s.replace('versionCode = 4','versionCode = 3501',1)
+          if 'versionName = "2.1"' in s:
+              s=s.replace('versionName = "2.1"','versionName = "35.0-TESTE"',1)
           g.write_text(s,encoding='utf-8')
           m=Path('app/src/main/AndroidManifest.xml')
           s=m.read_text(encoding='utf-8')
@@ -60,22 +52,22 @@ jobs:
           m.write_text(s,encoding='utf-8')
           PY
 
-          # Guardas obrigatórias: se faltar qualquer item, NÃO gera APK.
-          grep -q 'ASSISTENTE_TESTE_V35_TOMTOM_MANUTENCAO_INTEGRADO' index.html
-          grep -q 'Assistente de Viagem V35 — TESTE TomTom + Manutenção' index.html
-          grep -q 'function resetApp' index.html
-          grep -q 'id="abBarras"' index.html
-          grep -q 'API Key TomTom' index.html
-          grep -q 'Limite manual de reserva' index.html
-          grep -q 'CITY_MS=120000' index.html
-          grep -q 'ROAD_MS=360000' index.html
-          grep -q 'btnRelatorioManutencao' index.html
-          grep -q 'Gerar relatório PDF' index.html
-          grep -q 'applicationId = "com.assistentedeviagem.app.teste"' app/build.gradle.kts
-          grep -q 'android:label="Assistente de Viagem TESTE V35"' app/src/main/AndroidManifest.xml
-
+          # O HTML testado é colocado diretamente nos assets do APK.
           mkdir -p app/src/main/assets
           cp -f index.html app/src/main/assets/index.html
+
+          # Guardas: se a base testada perder alguma função, NÃO gera APK.
+          grep -q 'V35 HTML TESTE' index.html
+          grep -q 'TomTom' index.html
+          grep -q 'tomtomApiKey' index.html
+          grep -q 'tomtomModo' index.html
+          grep -q 'tomtomLimiteManual' index.html
+          grep -q 'btnRelatorioManutencao' index.html
+          grep -q 'Gerar relatório PDF' index.html
+          grep -q 'CITY=120000' index.html
+          grep -q 'ROAD=360000' index.html
+          grep -q 'applicationId = "com.assistentedeviagem.app.teste"' app/build.gradle.kts
+          grep -q 'android:label="Assistente de Viagem TESTE V35"' app/src/main/AndroidManifest.xml
 
       - name: Configurar Java 17
         uses: actions/setup-java@v4
