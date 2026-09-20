@@ -48,13 +48,13 @@ jobs:
               raise SystemExit('Gradle do app não encontrado')
           s=p.read_text(encoding='utf-8')
           if p.name=='build.gradle':
-              if 'applicationIdSuffix ".teste"' not in s:
-                  s=re.sub(r'(defaultConfig\s*\{)', r'\1\n        applicationIdSuffix ".teste"', s, count=1)
+              # Groovy DSL: put a unique package ID inside defaultConfig.
+              s=re.sub(r'applicationId\s+["\'][^"\']+["\']', 'applicationId "com.assistentedeviagem.app.teste"', s, count=1)
           else:
-              if 'applicationIdSuffix(".teste")' not in s:
-                  s=re.sub(r'(defaultConfig\s*\{)', r'\1\n        applicationIdSuffix(".teste")', s, count=1)
+              # Kotlin DSL: use a real applicationId assignment; applicationIdSuffix(...) is invalid here.
+              s=re.sub(r'applicationId\s*=\s*["\'][^"\']+["\']', 'applicationId = "com.assistentedeviagem.app.teste"', s, count=1)
           p.write_text(s,encoding='utf-8')
-          print('applicationIdSuffix .teste configurado em',p)
+          print('applicationId de TESTE configurado em',p)
           PY
 
       - name: Configurar Java 17
