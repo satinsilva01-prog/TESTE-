@@ -30,14 +30,11 @@ jobs:
           from pathlib import Path
           p=Path('index.html')
           s=p.read_text(encoding='utf-8')
-          s=s.replace('<title>Assistente de Viagem V35</title>',
-                      '<title>Assistente de Viagem V35 — TESTE TomTom + Manutenção</title>', 1)
-          for tag in ['<script src="tomtom-integracao.js"></script>',
-                      '<script src="manutencao-relatorio.js"></script>']:
+          s=s.replace('<title>Assistente de Viagem V35</title>', '<title>Assistente de Viagem V35 — TESTE TomTom + Manutenção</title>', 1)
+          for tag in ['<script src="tomtom-integracao.js"></script>', '<script src="manutencao-relatorio.js"></script>']:
               if tag not in s:
                   pos=s.lower().rfind('</body>')
-                  if pos < 0:
-                      raise SystemExit('INDEX sem </body>')
+                  if pos < 0: raise SystemExit('INDEX sem </body>')
                   s=s[:pos]+tag+'\n'+s[pos:]
           p.write_text(s,encoding='utf-8')
           PY
@@ -72,17 +69,17 @@ jobs:
         working-directory: source
         run: gradle clean :app:assembleDebug --no-build-cache
 
-      - name: Validar APK de TESTE
+      - name: Renomear APK para não substituir o aplicativo oficial
         working-directory: source
         run: |
           set -euxo pipefail
           test -s app/build/outputs/apk/debug/app-debug.apk
-          sha256sum app/build/outputs/apk/debug/app-debug.apk
-          echo 'APK TESTE V35 — TomTom econômico + limite manual/fallback + relatório de manutenção PDF'
+          mv app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/AssistenteDeViagem_TESTE_V35_TomTom_Manutencao.apk
+          sha256sum app/build/outputs/apk/debug/AssistenteDeViagem_TESTE_V35_TomTom_Manutencao.apk
 
-      - name: Publicar APK de TESTE
+      - name: Publicar APK de TESTE separado
         uses: actions/upload-artifact@v4
         with:
           name: Assistente-de-Viagem-TESTE-V35-TomTom-Manutencao-PDF
-          path: source/app/build/outputs/apk/debug/app-debug.apk
+          path: source/app/build/outputs/apk/debug/AssistenteDeViagem_TESTE_V35_TomTom_Manutencao.apk
           if-no-files-found: error
