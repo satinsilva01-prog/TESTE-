@@ -17,10 +17,10 @@ jobs:
           set -euxo pipefail
           git clone --depth 1 https://github.com/satinsilva01-prog/assistente-de-viagem.git source
           test -s source/index.html
-          test -s manutencao-relatorio.js
-          test -s tomtom-integracao-teste.js
-          cp manutencao-relatorio.js source/manutencao-relatorio.js
-          cp tomtom-integracao-teste.js source/tomtom-integracao.js
+          test -s ./manutencao-relatorio.js
+          test -s ./tomtom-integracao-teste.js
+          cp ./manutencao-relatorio.js source/manutencao-relatorio.js
+          cp ./tomtom-integracao-teste.js source/tomtom-integracao.js
 
       - name: Preparar V35 para TESTE sem alterar o oficial
         working-directory: source
