@@ -9,6 +9,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      - name: Baixar arquivos do repositório de teste
+        uses: actions/checkout@v4
+
       - name: Baixar base oficial V35 em área isolada
         run: |
           set -euxo pipefail
@@ -27,7 +30,6 @@ jobs:
           from pathlib import Path
           p=Path('index.html')
           s=p.read_text(encoding='utf-8')
-          # Identificação visual apenas no APK de teste.
           s=s.replace('<title>Assistente de Viagem V35</title>',
                       '<title>Assistente de Viagem V35 — TESTE TomTom + Manutenção</title>', 1)
           for tag in ['<script src="tomtom-integracao.js"></script>',
@@ -40,15 +42,11 @@ jobs:
           p.write_text(s,encoding='utf-8')
           PY
           rm -rf app/build .gradle
-          rm -f app/src/main/assets/index.html
-          rm -f app/src/main/assets/tomtom-integracao.js
-          rm -f app/src/main/assets/manutencao-relatorio.js
+          rm -f app/src/main/assets/index.html app/src/main/assets/tomtom-integracao.js app/src/main/assets/manutencao-relatorio.js
           mkdir -p app/src/main/assets
           cp -f index.html app/src/main/assets/index.html
           cp -f tomtom-integracao.js app/src/main/assets/tomtom-integracao.js
           cp -f manutencao-relatorio.js app/src/main/assets/manutencao-relatorio.js
-
-          # Validação da base e dos recursos do teste.
           grep -q 'Assistente de Viagem V35 — TESTE TomTom + Manutenção' index.html
           grep -q 'function resetApp' index.html
           grep -q 'id="abBarras"' index.html
