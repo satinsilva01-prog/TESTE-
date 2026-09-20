@@ -1,120 +1,60 @@
-name: Assistente de Viagem — TESTE V35 integrado
+name: Assistente de Viagem — TESTE V35 HTML validado
 
 on:
   push:
     branches: [main]
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Baixar arquivos do repositório de teste
+      - name: Baixar projeto de TESTE
         uses: actions/checkout@v4
 
-      - name: Baixar V35 oficial completa
+      - name: Baixar estrutura Android da V35
         run: |
           set -euxo pipefail
           git clone --depth 1 https://github.com/satinsilva01-prog/assistente-de-viagem.git source
           test -s source/index.html
+          test -s "$GITHUB_WORKSPACE/index.html"
 
-      - name: Integrar TomTom e relatório na V35 completa
+      - name: Copiar EXATAMENTE o HTML validado do TESTE para o APK
+        run: |
+          set -euxo pipefail
+          cp -f "$GITHUB_WORKSPACE/index.html" "$GITHUB_WORKSPACE/source/index.html"
+          echo 'VALIDANDO O HTML QUE ENTRARA NO APK:'
+          grep -q 'tomtomApiKey' "$GITHUB_WORKSPACE/source/index.html"
+          grep -q 'btnRelatorioManutencao' "$GITHUB_WORKSPACE/source/index.html"
+          grep -q 'avFuelBars' "$GITHUB_WORKSPACE/source/index.html"
+          grep -q 'btnResetApp' "$GITHUB_WORKSPACE/source/index.html"
+          grep -q 'av-trip-panel' "$GITHUB_WORKSPACE/source/index.html"
+          echo 'SHA DO HTML DO TESTE:'
+          sha256sum "$GITHUB_WORKSPACE/index.html"
+          echo 'SHA DO HTML COPIADO PARA O APK:'
+          sha256sum "$GITHUB_WORKSPACE/source/index.html"
+          cmp "$GITHUB_WORKSPACE/index.html" "$GITHUB_WORKSPACE/source/index.html"
+
+      - name: Criar identificador Android separado para TESTE
         working-directory: source
         run: |
           set -euxo pipefail
           python3 - <<'PY'
           from pathlib import Path
-          p=Path('index.html')
+          import re
+          candidates=[Path('app/build.gradle'),Path('app/build.gradle.kts')]
+          p=next((x for x in candidates if x.exists()),None)
+          if p is None:
+              raise SystemExit('Gradle do app não encontrado')
           s=p.read_text(encoding='utf-8')
-          required=['id="abBarras"','id="btnResetApp"','#av-trip-panel','function saveVehicle','function renderHistorico','function saveManutencao']
-          for x in required:
-              if x not in s: raise SystemExit('Base V35 incompleta: '+x)
-
-          css='''\n<style id="tomtom-manutencao-integrado-css">\n.tomtom-box{margin-top:12px;padding:12px;border:1px solid var(--line);border-radius:14px;background:var(--card)}\n.tomtom-title{font-weight:800;margin-bottom:10px}.tomtom-label{display:block;font-size:12px;font-weight:700;margin:9px 0 5px}\n.tomtom-box input,.tomtom-box select{width:100%;box-sizing:border-box}.tomtom-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}\n.history-report-actions{display:flex;gap:8px;margin:8px 0 12px}.history-report-actions button{width:100%}\n@media(max-width:520px){.tomtom-actions{grid-template-columns:1fr}.history-report-actions{display:block}}\n</style>\n'''
-          if 'id="tomtom-manutencao-integrado-css"' not in s:
-              s=s.replace('</head>',css+'</head>',1)
-
-          old_info='<details class="card"><summary>ℹ️ Informações da viagem</summary><div class="details-body"><div class="info-row"><span>GPS</span><b id="gps">Aguardando localização...</b></div><div class="info-row"><span>Velocidade da via</span><b id="limiteVelocidade">-- km/h</b></div><div class="info-row"><span>Alarme de limite</span><b id="statusLimiteVelocidade">Preparado</b></div><div class="info-row"><span>Ocorrências de excesso</span><b id="ocorrenciasVelocidade">0</b></div><div class="info-row"><span>Consultas de limite</span><b id="consultasLimite">0 / 2300</b></div><div class="info-row"><span>Consultas restantes</span><b id="consultasRestantes">2300</b></div><div class="info-row"><span>Último limite conhecido</span><b id="ultimoLimite">--</b></div><div class="info-row"><span>Correção de distância</span><b id="correcaoGps">Pronta</b></div><div class="info-row"><span>Tela durante a viagem</span><b id="telaStatus">Ativa</b></div><div class="future-space"></div><p class="note">Dados adicionais podem ser incorporados aqui sem alterar os cartões existentes.</p></div></details>'
-          new_info='''<details class="card"><summary>ℹ️ Informações da viagem</summary><div class="details-body"><div class="info-row"><span>GPS</span><b id="gps">Aguardando localização...</b></div><div class="info-row"><span>Velocidade da via</span><b id="limiteVelocidade">-- km/h</b></div><div class="info-row"><span>Alarme de limite</span><b id="statusLimiteVelocidade">Preparado</b></div><div class="info-row"><span>Ocorrências de excesso</span><b id="ocorrenciasVelocidade">0</b></div><div class="info-row"><span>Consultas de limite</span><b id="consultasLimite">0 / 2300</b></div><div class="info-row"><span>Consultas restantes</span><b id="consultasRestantes">2300</b></div><div class="info-row"><span>Último limite conhecido</span><b id="ultimoLimite">--</b></div>\n<div class="info-row"><span>Fonte do limite</span><b id="fonteLimite">Manual</b></div>\n<div class="info-row"><span>Tipo de via</span><b id="tipoVia">--</b></div>\n<div class="info-row"><span>Próxima consulta</span><b id="proximaConsultaLimite">--</b></div>\n<div class="info-row"><span>Consultas realizadas</span><b id="consultasTomTom">0</b></div>\n<div class="tomtom-box" id="tomtomBox">\n<div class="tomtom-title">🛣️ Controle do limite de velocidade</div>\n<label class="tomtom-label">Modo de controle</label><select id="tomtomModo"><option value="tomtom">TomTom — limite da via</option><option value="manual">Limite definido por mim</option></select>\n<label class="tomtom-label">Chave TomTom</label><input id="tomtomApiKey" type="password" autocomplete="off" placeholder="Cole sua API Key da TomTom">\n<div class="tomtom-actions"><button type="button" class="secondary" id="tomtomSalvar">Salvar chave</button><button type="button" class="secondary" id="tomtomLimpar">Limpar chave</button></div>\n<label class="tomtom-label">Limite manual / reserva (km/h)</label><input id="tomtomLimiteManual" type="number" min="1" max="300" step="1" placeholder="Ex.: 110">\n<div class="tomtom-actions"><button type="button" class="secondary" id="tomtomSalvarManual">Salvar limite</button><button type="button" class="secondary" id="tomtomObterChave">🔑 Obter chave TomTom</button></div>\n<div class="note" id="tomtomStatus">Configure a TomTom ou use um limite manual.</div></div>\n<div class="info-row"><span>Correção de distância</span><b id="correcaoGps">Pronta</b></div><div class="info-row"><span>Tela durante a viagem</span><b id="telaStatus">Ativa</b></div><div class="future-space"></div><p class="note">Dados adicionais podem ser incorporados aqui sem alterar os cartões existentes.</p></div></details>'''
-          if old_info in s: s=s.replace(old_info,new_info,1)
-          elif 'id="tomtomApiKey"' not in s: raise SystemExit('Não encontrei o cartão Informações da viagem da V35.')
-
-          old_hist='<div class="card"><h3>⛽ Histórico de abastecimentos</h3><div id="historicoAbastecimentos"></div></div><div class="card"><h3>🔧 Histórico de manutenção</h3><div id="historicoManutencao"></div></div><div class="card"><h3>🔧 Histórico de ajustes</h3><div id="historicoAjustes"></div></div>'
-          new_hist='<div class="card"><h3>⛽ Histórico de abastecimentos</h3><div id="historicoAbastecimentos"></div></div><div class="card"><h3>🔧 Histórico de manutenção</h3><div class="history-report-actions"><button type="button" class="primary" id="btnRelatorioManutencao">📄 Gerar relatório PDF</button></div><div id="historicoManutencao"></div></div><div class="card"><h3>🔧 Histórico de ajustes</h3><div id="historicoAjustes"></div></div>'
-          if old_hist in s: s=s.replace(old_hist,new_hist,1)
-
-          old_mnt='<div class="card"><h3>📋 Histórico de manutenção</h3><div id="mntHistorico"></div></div>'
-          new_mnt='<div class="card"><h3>📋 Histórico de manutenção</h3><div class="history-report-actions"><button type="button" class="primary" id="btnRelatorioManutencao2">📄 Gerar relatório PDF</button></div><div id="mntHistorico"></div></div>'
-          if old_mnt in s: s=s.replace(old_mnt,new_mnt,1)
-
-          gps_old="$('gps').textContent=`${c.lat.toFixed(5)}, ${c.lon.toFixed(5)} • ±${Math.round(c.accuracy)} m`;$('gpsDot').style.background='#20d84a';currentSpeed=c.speed;"
-          gps_new=gps_old+"if(typeof window.maybeConsultTomTom==='function')window.maybeConsultTomTom(c);"
-          if gps_old in s and 'maybeConsultTomTom(c)' not in s: s=s.replace(gps_old,gps_new,1)
-
-          limit_old='if(state.settings.limitQueries>=state.settings.limitQueryMax)return false;'
-          limit_new='if(!window.__avSettingLocalLimit && !window.__avTomTomUpdate && state.settings.limitQueries>=state.settings.limitQueryMax)return false;'
-          if limit_old in s: s=s.replace(limit_old,limit_new,1)
-
-          js=r'''<script id="tomtom-manutencao-integrado-js">
-          (function(){
-            const TOMTOM_KEY='av_tomtom_api_key',TOMTOM_MODE='av_tomtom_mode',TOMTOM_MANUAL='av_tomtom_manual_limit',TOMTOM_LAST='av_tomtom_last';
-            const CITY_MS=120000,ROAD_MS=360000,MIN_MS=90000;
-            let ttTimer=null,ttBusy=false,ttLastLat=null,ttLastLon=null,ttLastRoute='';
-            const $id=id=>document.getElementById(id),n=(v,d=0)=>Number.isFinite(Number(v))?Number(v):d;
-            const esc2=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-            function readSettings(){const mode=localStorage.getItem(TOMTOM_MODE)||'manual',key=localStorage.getItem(TOMTOM_KEY)||'',manual=n(localStorage.getItem(TOMTOM_MANUAL),110);if($id('tomtomModo'))$id('tomtomModo').value=mode;if($id('tomtomApiKey'))$id('tomtomApiKey').value=key;if($id('tomtomLimiteManual'))$id('tomtomLimiteManual').value=manual||'';return{mode,key,manual}}
-            function setStatus(t){if($id('tomtomStatus'))$id('tomtomStatus').textContent=t}
-            function applyManualIfNeeded(){const c=readSettings();if(c.mode==='manual'&&c.manual>0&&typeof window.setLimitFromProvider==='function'){window.__avSettingLocalLimit=true;window.setLimitFromProvider(c.manual);window.__avSettingLocalLimit=false;if($id('fonteLimite'))$id('fonteLimite').textContent='Manual'}}
-            function saveConfig(){const key=($id('tomtomApiKey')?.value||'').trim(),mode=$id('tomtomModo')?.value||'manual',manual=n($id('tomtomLimiteManual')?.value,110);localStorage.setItem(TOMTOM_KEY,key);localStorage.setItem(TOMTOM_MODE,mode);if(manual>0)localStorage.setItem(TOMTOM_MANUAL,String(Math.round(manual)));applyManualIfNeeded();setStatus(mode==='tomtom'?(key?'TomTom configurada.':'TomTom selecionada, mas a chave ainda não foi informada.'):`Limite manual configurado em ${Math.round(manual)} km/h.`)}
-            function hav(a,b){const R=6371,p=Math.PI/180,dLat=(b.lat-a.lat)*p,dLon=(b.lon-a.lon)*p,x=Math.sin(dLat/2)**2+Math.cos(a.lat*p)*Math.cos(b.lat*p)*Math.sin(dLon/2)**2;return 2*R*Math.asin(Math.sqrt(x))}
-            function setNext(ms){const e=$id('proximaConsultaLimite');if(!e)return;if(!ms){e.textContent='--';return}const sec=Math.max(0,Math.ceil(ms/1000));e.textContent=sec>=60?`${Math.ceil(sec/60)} min`:`${sec} s`}
-            function classifyRoad(d){const a=d?.addresses?.[0]?.address||{},x=d?.addresses?.[0]||{},ru=(x.roadUse||x.roadUses||[]).map(String),rn=x.routeNumbers||[],road=rn.length>0||ru.some(v=>/limitedaccess|arterial|ramp/i.test(v));return{type:road?'Rodovia/arterial':'Cidade',road}}
-            function extractLimit(d){const a=d?.addresses?.[0]?.address||{},c=[d?.addresses?.[0]?.speedLimit,a.speedLimit,d?.speedLimit];for(const v of c){const m=String(v??'').match(/([0-9]+(?:\.[0-9]+)?)/);if(m&&Number(m[1])>0&&Number(m[1])<300)return Number(m[1])}return null}
-            function fallback(reason){const v=n(localStorage.getItem(TOMTOM_MANUAL),110);if(v>0&&typeof window.setLimitFromProvider==='function'){window.__avSettingLocalLimit=true;window.setLimitFromProvider(v);window.__avSettingLocalLimit=false;if($id('fonteLimite'))$id('fonteLimite').textContent='Manual (reserva)';setStatus(`⚠️ ${reason}. Limite manual de ${Math.round(v)} km/h em uso.`)}}
-            async function consult(lat,lon){const c=readSettings();if(c.mode!=='tomtom'){applyManualIfNeeded();return}if(!c.key){fallback('Chave TomTom não informada');return}if(ttBusy)return;const now=Date.now(),last=Number(localStorage.getItem(TOMTOM_LAST)||0);if(now-last<MIN_MS){setNext(MIN_MS-(now-last));return}ttBusy=true;try{const u=`https://api.tomtom.com/search/2/reverseGeocode/${encodeURIComponent(lat)},${encodeURIComponent(lon)}.json?key=${encodeURIComponent(c.key)}&returnSpeedLimit=true&returnRoadUse=true`,r=await fetch(u,{cache:'no-store'});if(r.status===401||r.status===403){fallback('Chave TomTom inválida');return}if(r.status===429){fallback('Cota TomTom atingida');return}if(!r.ok)throw new Error(r.status);const d=await r.json();localStorage.setItem(TOMTOM_LAST,String(Date.now()));ttLastLat=lat;ttLastLon=lon;const cls=classifyRoad(d);ttLastRoute=cls.road?'rodovia':'';const lim=extractLimit(d);if($id('tipoVia'))$id('tipoVia').textContent=cls.type;if(lim&&typeof window.setLimitFromProvider==='function'){window.__avTomTomUpdate=true;window.setLimitFromProvider(lim);window.__avTomTomUpdate=false;if($id('fonteLimite'))$id('fonteLimite').textContent='TomTom';setStatus(`TomTom: limite ${Math.round(lim)} km/h • ${cls.type}.`)}else if(!lim)fallback('TomTom não retornou limite');const wait=cls.road?ROAD_MS:CITY_MS;setNext(wait);clearTimeout(ttTimer);ttTimer=setTimeout(()=>{if(window.__avLastGps)consult(window.__avLastGps.lat,window.__avLastGps.lon)},wait)}catch(e){fallback('TomTom indisponível')}finally{ttBusy=false}}
-            window.maybeConsultTomTom=function(pos){if(!pos||!Number.isFinite(pos.lat)||!Number.isFinite(pos.lon))return;window.__avLastGps=pos;const c=readSettings();if(c.mode!=='tomtom'){applyManualIfNeeded();return}const last=Number(localStorage.getItem(TOMTOM_LAST)||0),now=Date.now(),wait=ttLastRoute?ROAD_MS:CITY_MS,moved=ttLastLat==null?999:hav({lat:ttLastLat,lon:ttLastLon},pos);if(now-last>=wait||moved>=1.5||!ttLastLat)consult(pos.lat,pos.lon);else setNext(wait-(now-last))}
-            function report(){const arr=Array.isArray(state?.manutencoes)?state.manutencoes.slice():[],vf=$id('historicoVeiculoSelect')?.value||'',a=vf?arr.filter(m=>String(m.vehicleId||'')===String(vf)):arr;a.sort((x,y)=>String(y.date||'').localeCompare(String(x.date||'')));const rows=a.map(m=>`<tr><td>${esc2(m.vehicleName||'Não informado')}</td><td>${esc2(m.type||'Manutenção')}</td><td>${esc2(m.date?new Date(m.date+'T00:00:00').toLocaleDateString('pt-BR'):'Não informada')}</td><td>${esc2(m.odometerKm??'')}</td><td>R$ ${n(m.cost).toFixed(2).replace('.',',')}</td><td>${esc2(m.description||'')}</td><td>${m.nextKm??''}</td><td>${m.nextDate?new Date(m.nextDate+'T00:00:00').toLocaleDateString('pt-BR'):''}</td></tr>`).join(''),w=window.open('','_blank');if(!w){alert('Permita a abertura de janela para gerar o PDF.');return}w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Histórico de manutenção</title><style>@page{size:A4 landscape;margin:12mm}body{font-family:Arial;color:#111}table{width:100%;border-collapse:collapse;font-size:11px}th,td{border:1px solid #999;padding:6px;text-align:left}</style></head><body><h1>Histórico de Manutenção — Assistente de Viagem</h1><p>Veículo: ${esc2(vf?($id('historicoVeiculoSelect')?.selectedOptions?.[0]?.textContent||'Selecionado'):'Todos os veículos')}</p>${rows?`<table><thead><tr><th>Veículo</th><th>Manutenção</th><th>Data</th><th>Odômetro</th><th>Custo</th><th>Descrição</th><th>Próxima por km</th><th>Próxima por data</th></tr></thead><tbody>${rows}</tbody></table>`:'<p>Nenhuma manutenção registrada para este veículo.</p>'}<p>Use “Salvar como PDF” na janela de impressão.</p><script>window.onload=function(){setTimeout(function(){window.print()},300)}<\/script></body></html>`);w.document.close()}
-            function init(){readSettings();applyManualIfNeeded();$id('tomtomSalvar')?.addEventListener('click',saveConfig);$id('tomtomSalvarManual')?.addEventListener('click',saveConfig);$id('tomtomModo')?.addEventListener('change',saveConfig);$id('tomtomLimpar')?.addEventListener('click',()=>{localStorage.removeItem(TOMTOM_KEY);if($id('tomtomApiKey'))$id('tomtomApiKey').value='';setStatus('Chave TomTom removida.')});$id('tomtomObterChave')?.addEventListener('click',()=>window.open('https://developer.tomtom.com/','_blank'));$id('btnRelatorioManutencao')?.addEventListener('click',report);$id('btnRelatorioManutencao2')?.addEventListener('click',report)}
-            if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(init,0));else setTimeout(init,0)
-          })();
-          </script>
-          '''
-          if 'id="tomtom-manutencao-integrado-js"' not in s:
-              s=s.replace('</body>',js+'</body>',1)
-
+          if p.name=='build.gradle':
+              if 'applicationIdSuffix ".teste"' not in s:
+                  s=re.sub(r'(defaultConfig\s*\{)', r'\1\n        applicationIdSuffix ".teste"', s, count=1)
+          else:
+              if 'applicationIdSuffix(".teste")' not in s:
+                  s=re.sub(r'(defaultConfig\s*\{)', r'\1\n        applicationIdSuffix(".teste")', s, count=1)
           p.write_text(s,encoding='utf-8')
-          PY
-
-          # O APK recebe a V35 completa já integrada.
-          mkdir -p app/src/main/assets
-          cp -f index.html app/src/main/assets/index.html
-
-          # Guardas: nunca compilar uma base incompleta.
-          grep -q 'id="abBarras"' index.html
-          grep -q 'id="btnResetApp"' index.html
-          grep -q 'id="tomtomApiKey"' index.html
-          grep -q 'id="tomtomModo"' index.html
-          grep -q 'id="tomtomLimiteManual"' index.html
-          grep -q 'id="btnRelatorioManutencao"' index.html
-          grep -q 'id="tomtom-manutencao-integrado-js"' index.html
-          grep -q 'CITY_MS=120000' index.html
-          grep -q 'ROAD_MS=360000' index.html
-
-      - name: Configurar APK para instalação separada do oficial
-        working-directory: source
-        run: |
-          set -euxo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-          g=Path('app/build.gradle.kts');s=g.read_text(encoding='utf-8')
-          s=s.replace('applicationId = "com.assistentedeviagem.app"','applicationId = "com.assistentedeviagem.app.teste"',1)
-          s=s.replace('versionCode = 4','versionCode = 3502',1)
-          s=s.replace('versionName = "2.1"','versionName = "35.0-TESTE"',1)
-          g.write_text(s,encoding='utf-8')
-          m=Path('app/src/main/AndroidManifest.xml');s=m.read_text(encoding='utf-8');s=s.replace('android:label="Assistente de Viagem"','android:label="Assistente de Viagem TESTE V35"',1);m.write_text(s,encoding='utf-8')
+          print('applicationIdSuffix .teste configurado em',p)
           PY
 
       - name: Configurar Java 17
@@ -129,22 +69,19 @@ jobs:
           gradle-version: '8.13'
           cache-disabled: true
 
-      - name: Compilar APK separado
-        working-directory: source
-        run: gradle clean :app:assembleDebug --no-build-cache --rerun-tasks
-
-      - name: Validar APK e renomear
+      - name: Compilar APK TESTE
         working-directory: source
         run: |
           set -euxo pipefail
+          gradle clean :app:assembleDebug --no-build-cache
           APK=app/build/outputs/apk/debug/app-debug.apk
           test -s "$APK"
           mv "$APK" app/build/outputs/apk/debug/AssistenteDeViagem_TESTE_V35_TomTom_Manutencao_INTEGRADO.apk
           sha256sum app/build/outputs/apk/debug/AssistenteDeViagem_TESTE_V35_TomTom_Manutencao_INTEGRADO.apk
 
-      - name: Publicar APK de teste sem substituir o oficial
+      - name: Publicar APK TESTE
         uses: actions/upload-artifact@v4
         with:
-          name: AssistenteDeViagem-TESTE-V35-INTEGRADO-TomTom-Manutencao
+          name: AssistenteDeViagem-TESTE-V35-TomTom-Manutencao-INTEGRADO
           path: source/app/build/outputs/apk/debug/AssistenteDeViagem_TESTE_V35_TomTom_Manutencao_INTEGRADO.apk
           if-no-files-found: error
