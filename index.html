@@ -187,35 +187,23 @@ window.royaliLocalGetAll=royaliLocalGetAll;
 async function royaliLocalSaveAll(items){const db=await royaliLocalDB();return new Promise((resolve,reject)=>{const tx=db.transaction('products','readwrite'),store=tx.objectStore('products');for(const p of items){const clean={...p};delete clean._imageFile;delete clean._previewObjectUrl;store.put(clean);}tx.oncomplete=()=>{db.close();resolve();};tx.onerror=()=>{const e=tx.error||new Error('Falha ao salvar no armazenamento local');db.close();reject(e);};tx.onabort=()=>{const e=tx.error||new Error('Salvamento local cancelado');db.close();reject(e);};});}
 async function royaliFileToDataUrl(file){
  if(!file)throw new Error('Nenhuma foto foi selecionada.');
- // Normaliza formatos que o navegador consegue decodificar para JPEG, evitando salvar
- // arquivos HEIC/AVIF como se fossem imagens web que depois não aparecem após recarregar.
- try{
-  let bitmap;
-  if(typeof createImageBitmap==='function') bitmap=await createImageBitmap(file);
-  if(bitmap){
-   const maxSide=2600,scale=Math.min(1,maxSide/Math.max(bitmap.width,bitmap.height));
-   const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(bitmap.width*scale));canvas.height=Math.max(1,Math.round(bitmap.height*scale));
-   const ctx=canvas.getContext('2d');if(!ctx)throw new Error('Não foi possível preparar a imagem.');
-   ctx.drawImage(bitmap,0,0,canvas.width,canvas.height);bitmap.close?.();
-   const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',0.90));
-   if(blob){const result=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result||''));r.onerror=()=>reject(new Error('Não foi possível ler a imagem preparada.'));r.readAsDataURL(blob);});if(result.startsWith('data:image/jpeg;'))return result;}
-  }
- }catch(e){console.warn('Normalização da imagem não foi possível; tentando salvar o formato original.',e);}
- // Fallback para formatos web comuns; recusa formatos que o navegador não consegue confirmar.
- const mime=String(file.type||'').toLowerCase();
- if(!['image/jpeg','image/png','image/webp','image/gif'].includes(mime))throw new Error('Este formato de foto não pôde ser convertido pelo navegador. Salve a imagem como JPG ou PNG e selecione novamente.');
- try{const result=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result||''));r.onerror=()=>reject(new Error('FileReader indisponível'));r.onabort=()=>reject(new Error('Leitura da foto cancelada'));r.readAsDataURL(file);});if(result.startsWith('data:image/'))return result;}catch(e){console.warn('FileReader falhou; tentando conversão alternativa.',e);}
- // Alguns navegadores Android antigos não implementam File.arrayBuffer().
- // Tenta a API moderna e, se ela não existir/falhar, usa FileReader.readAsArrayBuffer.
- try{
-  let buffer;
-  if(typeof file.arrayBuffer==='function') buffer=await file.arrayBuffer();
-  else buffer=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=()=>reject(new Error('FileReader não conseguiu ler os bytes da imagem.'));r.onabort=()=>reject(new Error('Leitura da imagem cancelada.'));r.readAsArrayBuffer(file);});
-  const bytes=new Uint8Array(buffer);let binary='';const chunk=0x4000;
-  for(let i=0;i<bytes.length;i+=chunk)binary+=String.fromCharCode(...bytes.subarray(i,Math.min(i+chunk,bytes.length)));
-  const safeMime=['image/jpeg','image/png','image/webp','image/gif'].includes(mime)?mime:'image/jpeg';
-  return 'data:'+safeMime+';base64,'+btoa(binary);
- }catch(e){console.error('Fallback de leitura de imagem falhou:',e);throw new Error('O navegador não conseguiu ler esta foto. Tente salvá-la no celular como JPG ou PNG e selecione novamente.');}
+ const maxBytes=20*1024*1024;
+ if(file.size>maxBytes)throw new Error('A foto ultrapassa 20 MB. Escolha uma imagem menor.');
+ // Android: use FileReader primeiro; createImageBitmap pode falhar com fotos da galeria.
+ const readDataUrl=()=>new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>{const v=String(r.result||'');v.startsWith('data:')?resolve(v):reject(new Error('O navegador não retornou os dados da foto.'));};r.onerror=()=>reject(new Error('O celular não conseguiu ler o arquivo da foto.'));r.onabort=()=>reject(new Error('A leitura da foto foi cancelada.'));r.readAsDataURL(file);});
+ const source=await readDataUrl();
+ // Decode via HTMLImageElement, which is often more compatible than createImageBitmap on Android.
+ const img=await new Promise((resolve,reject)=>{const im=new Image();im.onload=()=>resolve(im);im.onerror=()=>reject(new Error('O navegador não consegue decodificar este formato de imagem. Abra a foto e salve uma cópia em JPG ou PNG.'));im.src=source;});
+ const w=Number(img.naturalWidth||img.width),h=Number(img.naturalHeight||img.height);
+ if(!w||!h)throw new Error('A foto foi lida, mas o navegador não identificou suas dimensões. Tente uma cópia em JPG ou PNG.');
+ const maxSide=2600,scale=Math.min(1,maxSide/Math.max(w,h));
+ const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(w*scale));canvas.height=Math.max(1,Math.round(h*scale));
+ const ctx=canvas.getContext('2d');if(!ctx)throw new Error('O navegador não conseguiu preparar a foto para salvar.');
+ ctx.drawImage(img,0,0,canvas.width,canvas.height);
+ const blob=await new Promise((resolve,reject)=>{try{canvas.toBlob(b=>b?resolve(b):reject(new Error('A conversão da foto falhou. Tente outra imagem JPG ou PNG.')),'image/jpeg',0.90);}catch(e){reject(e);}});
+ const result=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result||''));r.onerror=()=>reject(new Error('A foto convertida não pôde ser lida para armazenamento.'));r.readAsDataURL(blob);});
+ if(!result.startsWith('data:image/jpeg;base64,'))throw new Error('A conversão não gerou uma imagem JPG válida.');
+ return result;
 }
 async function royaliLocalLoadCatalog(){
  let saved=[];
