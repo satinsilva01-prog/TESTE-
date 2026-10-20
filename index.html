@@ -205,7 +205,17 @@ async function royaliFileToDataUrl(file){
  const mime=String(file.type||'').toLowerCase();
  if(!['image/jpeg','image/png','image/webp','image/gif'].includes(mime))throw new Error('Este formato de foto não pôde ser convertido pelo navegador. Salve a imagem como JPG ou PNG e selecione novamente.');
  try{const result=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result||''));r.onerror=()=>reject(new Error('FileReader indisponível'));r.onabort=()=>reject(new Error('Leitura da foto cancelada'));r.readAsDataURL(file);});if(result.startsWith('data:image/'))return result;}catch(e){console.warn('FileReader falhou; tentando conversão alternativa.',e);}
- try{const buffer=await file.arrayBuffer();const bytes=new Uint8Array(buffer);let binary='';const chunk=0x8000;for(let i=0;i<bytes.length;i+=chunk)binary+=String.fromCharCode(...bytes.subarray(i,Math.min(i+chunk,bytes.length)));return 'data:'+mime+';base64,'+btoa(binary);}catch(e){throw new Error('Não foi possível converter a foto para armazenamento local. Tente uma imagem JPG ou PNG menor que 20 MB.');}
+ // Alguns navegadores Android antigos não implementam File.arrayBuffer().
+ // Tenta a API moderna e, se ela não existir/falhar, usa FileReader.readAsArrayBuffer.
+ try{
+  let buffer;
+  if(typeof file.arrayBuffer==='function') buffer=await file.arrayBuffer();
+  else buffer=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=()=>reject(new Error('FileReader não conseguiu ler os bytes da imagem.'));r.onabort=()=>reject(new Error('Leitura da imagem cancelada.'));r.readAsArrayBuffer(file);});
+  const bytes=new Uint8Array(buffer);let binary='';const chunk=0x4000;
+  for(let i=0;i<bytes.length;i+=chunk)binary+=String.fromCharCode(...bytes.subarray(i,Math.min(i+chunk,bytes.length)));
+  const safeMime=['image/jpeg','image/png','image/webp','image/gif'].includes(mime)?mime:'image/jpeg';
+  return 'data:'+safeMime+';base64,'+btoa(binary);
+ }catch(e){console.error('Fallback de leitura de imagem falhou:',e);throw new Error('O navegador não conseguiu ler esta foto. Tente salvá-la no celular como JPG ou PNG e selecione novamente.');}
 }
 async function royaliLocalLoadCatalog(){
  let saved=[];
